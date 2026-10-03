@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft 3D Voxel Typography Studio</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Google Fonts for pixel vibe -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #121214;
+            color: #f3f4f6;
+            overflow: hidden;
+            user-select: none;
+        }
+        .pixel-font {
+            font-family: 'Press Start 2P', monospace;
+        }
+        .minecraft-btn {
+            background: #7a7a7a;
+            border-top: 3px solid #b5b5b5;
+            border-left: 3px solid #b5b5b5;
+            border-right: 3px solid #373737;
+            border-bottom: 3px solid #373737;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.4);
+            transition: all 0.05s ease;
+        }
+        .minecraft-btn:active, .minecraft-btn.active {
+            background: #5e5e5e;
+            border-top: 3px solid #373737;
+            border-left: 3px solid #373737;
+            border-right: 3px solid #b5b5b5;
+            border-bottom: 3px solid #b5b5b5;
+            transform: translateY(2px);
+        }
+        .minecraft-panel {
+            background-color: rgba(26, 26, 30, 0.85);
+            backdrop-filter: blur(12px);
+            border: 3px solid #4a4a52;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+        /* Custom scrollbar for inventory */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.3);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col">
+
+    <header class="bg-[#1c1c24] border-b-2 border-[#33333d] px-4 py-3 flex items-center justify-between z-20 shadow-lg">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 bg-[#3c8527] border-2 border-[#1e4413] flex items-center justify-center shadow-md rounded-none">
+                <span class="pixel-font text-xs text-white">MC</span>
+            </div>
+            <div>
+                <h1 class="pixel-font text-xs md:text-sm text-yellow-400 tracking-wider">MINECRAFT 3D TYPO</h1>
+                <p class="text-xs text-gray-400">Type on keyboard or click keys to build voxel 3D letters</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2">
+            <button id="btn-sound" class="minecraft-btn px-3 py-1.5 text-xs pixel-font text-white flex items-center space-x-1 cursor-pointer">
+                <span>🔊 SFX: ON</span>
+            </button>
+            <button id="btn-reset" class="minecraft-btn px-3 py-1.5 text-xs pixel-font text-red-300 hover:text-red-100 cursor-pointer">
+                CLEAR
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 relative flex flex-col md:flex-row overflow-hidden">
+        
+        <!-- 3D Canvas Viewport -->
+        <div id="canvas-container" class="flex-1 relative w-full h-full cursor-grab active:cursor-grabbing">
+            <div id="crosshair" class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+                <div class="w-4 h-4 border-2 border-white rounded-full"></div>
+            </div>
+            <!-- Instructions Overlay -->
+            <div class="absolute top-4 left-4 pointer-events-none bg-black/60 backdrop-blur-sm p-3 border border-white/10 rounded-lg text-xs space-y-1 text-gray-300">
+                <div class="font-bold text-yellow-400">Controls:</div>
+                <div>• Type letters/numbers on keyboard</div>
+                <div>• Drag to rotate camera</div>
+                <div>• Scroll to zoom in/out</div>
+            </div>
+            <!-- Material Selector HUD -->
+            <div class="absolute top-4 right-4 bg-[#1a1a20]/90 border-2 border-[#4a4a52] p-2 rounded-lg flex flex-col space-y-2 z-10 shadow-2xl">
+                <span class="text-[10px] pixel-font text-gray-400 text-center">MATERIAL</span>
+                <div id="material-picker" class="flex flex-col space-y-1.5">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- On-Screen Keyboard / Inventory Panel -->
+        <div class="w-full md:w-96 minecraft-panel p-4 flex flex-col justify-between z-10 shadow-2xl overflow-y-auto max-h-[45vh] md:max-h-none">
+            <div class="space-y-4">
+                <div class="flex justify-between items-center border-b border-gray-700 pb-2">
+                    <span class="pixel-font text-xs text-yellow-400">INVENTORY KEYBOARD</span>
+                    <span id="char-count" class="text-xs text-gray-400 font-mono">0 chars</span>
+                </div>
+
+                <!-- Current Text Input Display -->
+                <div class="bg-black/50 border-2 border-gray-700 p-3 rounded flex items-center justify-between">
+                    <div id="current-text-display" class="font-mono text-sm tracking-widest text-emerald-400 truncate">_</div>
+                    <button id="btn-backspace" class="minecraft-btn px-2.5 py-1 text-xs pixel-font text-white hover:bg-gray-600">⌫</button>
+                </div>
+
+                <!-- Keyboard Keys Grid -->
+                <div class="space-y-2">
+                    <!-- Numbers row -->
+                    <div class="grid grid-cols-10 gap-1" id="row-nums"></div>
+                    <!-- QWERTY rows -->
+                    <div class="grid grid-cols-10 gap-1" id="row-q"></div>
+                    <div class="grid grid-cols-9 gap-1 px-2" id="row-a"></div>
+                    <div class="grid grid-cols-7 gap-1 px-4" id="row-z"></div>
+                    <!-- Space bar row -->
+                    <div class="flex justify-center pt-1">
+                        <button data-char=" " class="minecraft-btn w-3/4 py-2 text-xs pixel-font text-white rounded">SPACE</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export / Action Footer -->
+            <div class="mt-4 pt-3 border-t border-gray-700 flex space-x-2">
+                <button id="btn-screenshot" class="minecraft-btn flex-1 py-2 text-xs pixel-font text-white bg-[#3c8527] hover:bg-[#459a30]">
+                    📸 SCREENSHOT
+                </button>
+                <button id="btn-bounce" class="minecraft-btn px-3 py-2 text-xs pixel-font text-yellow-300">
+                    ✨ BOUNCE
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- SOUND SYNTHESIZER (Web Audio API for Minecraft Sound Effects) ---
+        let soundEnabled = true;
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playBlockPlaceSound() {
+            if (!soundEnabled) return;
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = 'triangle';
+            // Randomize pitch slightly for organic wooden/stone clack
+            osc.frequency.setValueAtTime(120 + Math.random() * 40, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.08);
+
+            gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.08);
+        }
+
+        function playClickSound() {
+            if (!soundEnabled) return;
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.04);
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.04);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.04);
+        }
+
+        // --- PROCEDURAL MINECRAFT TEXTURES ---
+        // Generates crisp pixelated canvas textures to wrap around Three.js materials
+        function createPixelTexture(type) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 16;
+            canvas.height = 16;
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+
+            if (type === 'grass') {
+                // Dirt base
+                ctx.fillStyle = '#866043';
+                ctx.fillRect(0, 0, 16, 16);
+                // Dirt noise
+                for (let i = 0; i < 40; i++) {
+                    ctx.fillStyle = Math.random() > 0.5 ? '#734e32' : '#99704d';
+                    ctx.fillRect(Math.floor(Math.random()*16), Math.floor(Math.random()*16), 1, 1);
+                }
+                // Grass top band
+                ctx.fillStyle = '#5b8731';
+                ctx.fillRect(0, 0, 16, 5);
+                for (let i = 0; i < 15; i++) {
+                    ctx.fillStyle = Math.random() > 0.5 ? '#4c7228' : '#699c3a';
+                    ctx.fillRect(Math.floor(Math.random()*16), Math.floor(Math.random()*5), 1, 1);
+                }
+                // Drips
+                ctx.fillStyle = '#5b8731';
+                ctx.fillRect(2, 5, 1, 2);
+                ctx.fillRect(7, 5, 1, 3);
+                ctx.fillRect(12, 5, 1, 1);
+            } else if (type === 'stone') {
+                ctx.fillStyle = '#737373';
+                ctx.fillRect(0, 0, 16, 16);
+                for (let i = 0; i < 50; i++) {
+                    const shade = Math.random();
+                    ctx.fillStyle = shade > 0.6 ? '#5e5e5e' : (shade > 0.3 ? '#858585' : '#4a4a4a');
+                    ctx.fillRect(Math.floor(Math.random()*16), Math.floor(Math.random()*16), 1, 1);
+                }
+            } else if (type === 'diamond') {
+                ctx.fillStyle = '#11b5af';
+                ctx.fillRect(0, 0, 16, 16);
+                // Stone base noise
+                for (let i = 0; i < 40; i++) {
+                    ctx.fillStyle = Math.random() > 0.5 ? '#0e9e98' : '#14c9c2';
+                    ctx.fillRect(Math.floor(Math.random()*16), Math.floor(Math.random()*16), 1, 1);
+                }
+                // Diamond sparkles
+                const crystals = [[3,4], [11,2], [7,9], [2,13], [12,12]];
+                crystals.forEach(([x, y]) => {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(x, y, 2, 2);
+                    ctx.fillStyle = '#8cf2ee';
+                    ctx.fillRect(x+1, y, 1, 1);
+                });
+            } else if (type === 'gold') {
+                ctx.fillStyle = '#fce303';
+                ctx.fillRect(0, 0, 16, 16);
+                for (let i = 0; i < 45; i++) {
+                    ctx.fillStyle = Math.random() > 0.5 ? '#e6cf02' : '#fff066';
+                    ctx.fillRect(Math.floor(Math.random()*16), Math.floor(Math.random()*16), 1, 1);
+                }
+                // Nugget clusters
+                const nuggets = [[4,3], [10,5], [6,11], [13,10]];
+                nuggets.forEach(([x, y]) => {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(x, y, 2, 1);
+                    ctx.fillStyle = '#c7b200';
+                    ctx.fillRect(x, y+1, 2, 1);
+                });
+            } else if (type === 'obsidian') {
+                ctx.fillStyle = '#18112b';
+                ctx.fillRect(0, 0, 16, 16);
+                for (let i = 0; i < 50; i++) {
+                    const r = Math.random();
+                    ctx.fillStyle = r > 0.7 ? '#352954' : (r > 0.4 ? '#0d0917' : '#23193d');
+                    ctx.fillRect(Math.floor(Math.random()*16), Math.floor(Math.random()*16), 1, 1);
+                }
+                // Purple glints
+                ctx.fillRect(5, 5, 2, 1);
+                ctx.fillRect(11, 12, 1, 2);
+            } else if (type === 'wood') {
+                ctx.fillStyle = '#825832';
+                ctx.fillRect(0, 0, 16, 16);
+                // Horizontal plank lines
+                ctx.fillStyle = '#54371d';
+                ctx.fillRect(0, 0, 16, 1);
+                ctx.fillRect(0, 8, 16, 1);
+                // Vertical wood grain
+                for (let i = 0; i < 30; i++) {
+                    ctx.fillStyle = Math.random() > 0.5 ? '#6e4827' : '#96673b';
+                    ctx.fillRect(Math.floor(Math.random()*16), Math.floor(Math.random()*16), 1, 1);
+                }
+            } else if (type === 'redstone') {
+                ctx.fillStyle = '#8f0e0e';
+                ctx.fillRect(0, 0, 16, 16);
+                for (let i = 0; i < 40; i++) {
+                    ctx.fillStyle = Math.random() > 0.5 ? '#ab1313' : '#690707';
+                    ctx.fillRect(Math.floor(Math.random()*16), Math.floor(Math.random()*16), 1, 1);
+                }
+                // Glowing redstone dust patterns
+                const dust = [[3,3], [4,3], [10,8], [11,8], [6,13], [7,13]];
+                dust.forEach(([x, y]) => {
+                    ctx.fillStyle = '#ff3333';
+                    ctx.fillRect(x, y, 1, 1);
+                });
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.magFilter = THREE.NearestFilter;
+            texture.minFilter = THREE.NearestFilter;
+            return texture;
+        }
+
+        // Available Materials Configuration
+        const MATERIALS = [
+            { id: 'grass', name: 'Grass Block', color: '#5b8731' },
+            { id: 'stone', name: 'Stone', color: '#737373' },
+            { id: 'diamond', name: 'Diamond Ore', color: '#11b5af' },
+            { id: 'gold', name: 'Gold Block', color: '#fce303' },
+            { id: 'obsidian', name: 'Obsidian', color: '#18112b' },
+            { id: 'wood', name: 'Oak Planks', color: '#825832' },
+            { id: 'redstone', name: 'Redstone Block', color: '#8f0e0e' }
+        ];
+
+        let currentMaterialId = 'grass';
+        let texturesMap = {};
+
+        // --- 3D VOXEL LETTER MATRICES (5x7 Grid per Character) ---
+        // 1 = voxel block, 0 = empty space
+        const FONT_3D = {
+            'A': [
+                [0,1,1,1,0],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,1,1,1,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1]
+            ],
+            'B': [
+                [1,1,1,1,0],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,1,1,1,0],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,1,1,1,0]
+            ],
+            'C': [
+                [0,1,1,1,0],
+                [1,0,0,0,1],
+                [1,0,0,0,0],
+                [1,0,0,0,0],
+                [1,0,0,0,0],
+                [1,0,0,0,1],
+                [0,1,1,1,0]
+            ],
+            'D': [
+                [1,1,1,1,0],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,1,1,1,0]
+            ],
+            'E': [
+                [1,1,1,1,1],
+                [1,0,0,0,0],
+                [1,0,0,0,0],
+                [1,1,1,1,0],
+                [1,0,0,0,0],
+                [1,0,0,0,0],
+                [1,1,1,1,1]
+            ],
+            'F': [
+                [1,1,1,1,1],
+                [1,0,0,0,0],
+                [1,0,0,0,0],
+                [1,1,1,1,0],
+                [1,0,0,0,0],
+                [1,0,0,0,0],
+                [1,0,0,0,0]
+            ],
+            'G': [
+                [0,1,1,1,0],
+                [1,0,0,0,1],
+                [1,0,0,0,0],
+                [1,0,1,1,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [0,1,1,1,0]
+            ],
+            'H': [
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,1,1,1,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1]
+            ],
+            'I': [
+                [1,1,1,1,1],
+                [0,0,1,0,0],
+                [0,0,1,0,0],
+                [0,0,1,0,0],
+                [0,0,1,0,0],
+                [0,0,1,0,0],
+                [1,1,1,1,1]
+            ],
+            'J': [
+                [1,1,1,1,1],
+                [0,0,1,0,0],
+                [0,0,1,0,0],
+                [0,0,1,0,0],
+                [1,0,1,0,0],
+                [1,0,1,0,0],
+                [0,1,1,0,0]
+            ],
+            'K': [
+                [1,0,0,0,1],
+                [1,0,0,1,0],
+                [1,0,1,0,0],
+                [1,1,0,0,0],
+                [1,0,1,0,0],
+                [1,0,0,1,0],
+                [1,0,0,0,1]
+            ],
+            'L': [
+                [1,0,0,0,0],
+                [1,0,0,0,0],
+                [1,0,0,0,0],
+                [1,0,0,0,0],
+                [1,0,0,0,0],
+                [1,0,0,0,0],
+                [1,1,1,1,1]
+            ],
+            'M': [
+                [1,0,0,0,1],
+                [1,1,0,1,1],
+                [1,0,1,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1]
+            ],
+            'N': [
+                [1,0,0,0,1],
+                [1,1,0,0,1],
+                [1,0,1,0,1],
+                [1,0,0,1,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1]
+            ],
+            'O': [
+                [0,1,1,1,0],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [0,1,1,1,0]
+            ],
+            'P': [
+                [1,1,1,1,0],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,1,1,1,0],
+                [1,0,0,0,0],
+                [1,0,0,0,0],
+                [1,0,0,0,0]
+            ],
+            'Q': [
+                [0,1,1,1,0],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,1,0,1],
+                [1,0,0,1,0],
+                [0,1,1,0,1]
+            ],
+            'R': [
+                [1,1,1,1,0],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,1,1,1,0],
+                [1,0,1,0,0],
+                [1,0,0,1,0],
+                [1,0,0,0,1]
+            ],
+            'S': [
+                [0,1,1,1,0],
+                [1,0,0,0,1],
+                [1,0,0,0,0],
+                [0,1,1,1,0],
+                [0,0,0,0,1],
+                [1,0,0,0,1],
+                [0,1,1,1,0]
+            ],
+            'T': [
+                [1,1,1,1,1],
+                [0,0,1,0,0],
+                [0,0,1,0,0],
+                [0,0,1,0,0],
+                [0,0,1,0,0],
+                [0,0,1,0,0],
+                [0,0,1,0,0]
+            ],
+            'U': [
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [0,1,1,1,0]
+            ],
+            'V': [
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [0,1,0,1,0],
+                [0,1,0,1,0],
+                [0,0,1,0,0]
+            ],
+            'W': [
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,1,0,1],
+                [1,1,0,1,1],
+                [1,0,0,0,1]
+            ],
+            'X': [
+                [1,0,0,0,1],
+                [0,1,0,1,0],
+                [0,0,1,0,0],
+                [0,0,1,0,0],
+                [0,0,1,0,0],
+                [0,1,0,1,0],
+                [1,0,0,0,1]
+            ],
+            'Y': [
+                [1,0,0,0,1],
+                [0,1,0,1,0],
+                [0,0,1,0,0],
+                [0,0,1,0,0],
+                [0,0,1,0,0],
+                [0,0,1,0,0],
+                [0,0,1,0,0]
+            ],
+            'Z': [
+                [1,1,1,1,1],
+                [0,0,0,0,1],
+                [0,0,0,1,0],
+                [0,0,1,0,0],
+                [0,1,0,0,0],
+                [1,0,0,0,0],
+                [1,1,1,1,1]
+            ],
+            '0': [
+                [0,1,1,1,0],
+                [1,0,0,1,1],
+                [1,0,1,0,1],
+                [1,1,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [0,1,1,1,0]
+            ],
+            '1': [
+                [0,0,1,0,0],
+                [0,1,1,0,0],
+                [0,0,1,0,0],
+                [0,0,1,0,0],
+                [0,0,1,0,0],
+                [0,0,1,0,0],
+                [1,1,1,1,1]
+            ],
+            '2': [
+                [0,1,1,1,0],
+                [1,0,0,0,1],
+                [0,0,0,0,1],
+                [0,0,1,1,0],
+                [0,1,0,0,0],
+                [1,0,0,0,0],
+                [1,1,1,1,1]
+            ],
+            '3': [
+                [0,1,1,1,0],
+                [1,0,0,0,1],
+                [0,0,0,0,1],
+                [0,1,1,1,0],
+                [0,0,0,0,1],
+                [1,0,0,0,1],
+                [0,1,1,1,0]
+            ],
+            '4': [
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,1,1,1,1],
+                [0,0,0,0,1],
+                [0,0,0,0,1],
+                [0,0,0,0,1]
+            ],
+            '5': [
+                [1,1,1,1,1],
+                [1,0,0,0,0],
+                [1,1,1,1,0],
+                [0,0,0,0,1],
+                [0,0,0,0,1],
+                [1,0,0,0,1],
+                [0,1,1,1,0]
+            ],
+            '6': [
+                [0,1,1,1,0],
+                [1,0,0,0,0],
+                [1,1,1,1,0],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [0,1,1,1,0]
+            ],
+            '7': [
+                [1,1,1,1,1],
+                [0,0,0,0,1],
+                [0,0,0,1,0],
+                [0,0,1,0,0],
+                [0,1,0,0,0],
+                [0,1,0,0,0],
+                [0,1,0,0,0]
+            ],
+            '8': [
+                [0,1,1,1,0],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [0,1,1,1,0],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [0,1,1,1,0]
+            ],
+            '9': [
+                [0,1,1,1,0],
+                [1,0,0,0,1],
+                [1,0,0,0,1],
+                [0,1,1,1,1],
+                [0,0,0,0,1],
+                [1,0,0,0,1],
+                [0,1,1,1,0]
+            ],
+            ' ': [
+                [0,0,0,0,0],
+                [0,0,0,0,0],
+                [0,0,0,0,0],
+                [0,0,0,0,0],
+                [0,0,0,0,0],
+                [0,0,0,0,0],
+                [0,0,0,0,0]
+            ]
+        };
+
+        // --- THREE.JS SCENE SETUP ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a24);
+        scene.fog = new THREE.FogExp2(0x1a1a24, 0.025);
+
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.set(0, 4, 22);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 + 0.1; // Don't go far below ground
+        controls.minDistance = 5;
+        controls.maxDistance = 50;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xfff5e6, 1.2);
+        dirLight.position.set(15, 25, 15);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.bias = -0.0005;
+        scene.add(dirLight);
+
+        const pointLight = new THREE.PointLight(0x7df9ff, 1, 30);
+        pointLight.position.set(-10, 10, -10);
+        scene.add(pointLight);
+
+        // Minecraft Grid Floor
+        const floorGeo = new THREE.PlaneGeometry(100, 100, 50, 50);
+        const floorMat = new THREE.MeshStandardMaterial({
+            color: 0x1e1e26,
+            roughness: 0.9,
+            metalness: 0.1
+        });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -4.5;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // Grid lines overlay
+        const gridHelper = new THREE.GridHelper(100, 50, 0x4a4a5a, 0x2a2a35);
+        gridHelper.position.y = -4.48;
+        scene.add(gridHelper);
+
+        // --- STREAMING_CHUNK:Building application state and voxel generation logic... ---
+        let typedText = "MINECRAFT";
+        let letterMeshesGroup = new THREE.Group();
+        scene.add(letterMeshesGroup);
+
+        // Particle system for block drops / dust
+        let particlesGroup = new THREE.Group();
+        scene.add(particlesGroup);
+
+        function spawnDustParticles(x, y, z) {
+            const particleCount = 12;
+            const geom = new THREE.BoxGeometry(0.15, 0.15, 0.15);
+            const mat = new THREE.MeshBasicMaterial({ color: MATERIALS.find(m => m.id === currentMaterialId).color });
+
+            for (let i = 0; i < particleCount; i++) {
+                const mesh = new THREE.Mesh(geom, mat);
+                mesh.position.set(
+                    x + (Math.random() - 0.5) * 0.8,
+                    y + (Math.random() - 0.5) * 0.8,
+                    z + (Math.random() - 0.5) * 0.8
+                );
+                
+                const velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.15,
+                    Math.random() * 0.2 + 0.05,
+                    (Math.random() - 0.5) * 0.15
+                );
+
+                particlesGroup.add(mesh);
+
+                // Animate and remove particle
+                let life = 1.0;
+                function updateParticle() {
+                    life -= 0.03;
+                    mesh.position.add(velocity);
+                    velocity.y -= 0.01; // gravity
+                    mesh.scale.multiplyScalar(0.95);
+                    if (life > 0) {
+                        requestAnimationFrame(updateParticle);
+                    } else {
+                        particlesGroup.remove(mesh);
+                        geom.dispose();
+                    }
+                }
+                updateParticle();
+            }
+        }
+
+        // Build 3D Voxel Text from string
+        function rebuildText3D() {
+            // Clear existing letter meshes
+            while (letterMeshesGroup.children.length > 0) {
+                const obj = letterMeshesGroup.children[0];
+                letterMeshesGroup.remove(obj);
+                if (obj.geometry) obj.geometry.dispose();
+            }
+
+            if (!texturesMap[currentMaterialId]) {
+                texturesMap[currentMaterialId] = createPixelTexture(currentMaterialId);
+            }
+            const texture = texturesMap[currentMaterialId];
+            
+            // Create cube geometry once for instancing/batching performance or clean mesh building
+            const cubeGeo = new THREE.BoxGeometry(0.95, 0.95, 0.95);
+            const cubeMat = new THREE.MeshStandardMaterial({
+                map: texture,
+                roughness: 0.8,
+                metalness: 0.2
+            });
+
+            const charWidth = 6; // 5 columns + 1 spacing
+            const totalWidth = typedText.length * charWidth;
+            const startX = -totalWidth / 2 + 3;
+
+            for (let i = 0; i < typedText.length; i++) {
+                const char = typedText[i].toUpperCase();
+                const matrix = FONT_3D[char] || FONT_3D[' '];
+                const charGroup = new THREE.Group();
+                const charBaseX = startX + i * charWidth;
+
+                for (let row = 0; row < matrix.length; row++) {
+                    for (let col = 0; col < matrix[row].length; col++) {
+                        if (matrix[row][col] === 1) {
+                            const cube = new THREE.Mesh(cubeGeo, cubeMat);
+                            cube.castShadow = true;
+                            cube.receiveShadow = true;
+
+                            // 3D coordinates: center each letter
+                            const x = col * 1.0;
+                            const y = (6 - row) * 1.0 - 3.5; // invert row so top is positive
+                            const z = 0;
+
+                            cube.position.set(x, y, z);
+                            charGroup.add(cube);
+                        }
+                    }
+                }
+
+                charGroup.position.x = charBaseX;
+                
+                // Entrance drop animation target offset
+                charGroup.position.y += 12;
+                charGroup.targetY = 0;
+                charGroup.dropSpeed = 0.8;
+                
+                // Store initial target for bounce effects
+                charGroup.baseY = 0;
+
+                letterMeshesGroup.add(charGroup);
+                spawnDustParticles(charBaseX, -3.5, 0);
+            }
+
+            playBlockPlaceSound();
+            updateUI();
+        }
+
+        // --- STREAMING_CHUNK:Implementing UI controls, keyboard listeners, and interactivity... ---
+        function updateUI() {
+            document.getElementById('current-text-display').textContent = typedText || '_';
+            document.getElementById('char-count').textContent = `${typedText.length} chars`;
+        }
+
+        // Populate Material Picker HUD
+        const materialPickerEl = document.getElementById('material-picker');
+        MATERIALS.forEach(mat => {
+            const btn = document.createElement('button');
+            btn.className = `flex items-center space-x-2 px-2.5 py-1.5 rounded border text-xs transition-all ${mat.id === currentMaterialId ? 'border-yellow-400 bg-black/40' : 'border-gray-700 bg-black/20 hover:border-gray-500'}`;
+            btn.innerHTML = `<span class="w-3 h-3 rounded-sm inline-block" style="background-color: ${mat.color}"></span><span class="pixel-font text-[9px] text-gray-200">${mat.name}</span>`;
+            btn.onclick = () => {
+                currentMaterialId = mat.id;
+                playClickSound();
+                // Update active styles
+                document.querySelectorAll('#material-picker button').forEach(b => b.classList.remove('border-yellow-400', 'bg-black/40'));
+                btn.classList.add('border-yellow-400', 'bg-black/40');
+                rebuildText3D();
+            };
+            materialPickerEl.appendChild(btn);
+        });
+
+        // Build On-Screen Keyboard
+        const keysConfig = {
+            'row-nums': ['1','2','3','4','5','6','7','8','9','0'],
+            'row-q': ['Q','W','E','R','T','Y','U','I','O','P'],
+            'row-a': ['A','S','D','F','G','H','J','K','L'],
+            'row-z': ['Z','X','C','V','B','N','M']
+        };
+
+        Object.keys(keysConfig).forEach(rowId => {
+            const rowEl = document.getElementById(rowId);
+            keysConfig[rowId].forEach(char => {
+                const keyBtn = document.createElement('button');
+                keyBtn.className = 'minecraft-btn py-2 text-xs pixel-font text-white rounded flex items-center justify-center';
+                keyBtn.textContent = char;
+                keyBtn.dataset.char = char;
+                keyBtn.onclick = () => {
+                    if (typedText.length < 16) {
+                        typedText += char;
+                        playClickSound();
+                        rebuildText3D();
+                        keyBtn.classList.add('active');
+                        setTimeout(() => keyBtn.classList.remove('active'), 100);
+                    }
+                };
+                rowEl.appendChild(keyBtn);
+            });
+        });
+
+        // Physical Keyboard listener
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace') {
+                if (typedText.length > 0) {
+                    typedText = typedText.slice(0, -1);
+                    playClickSound();
+                    rebuildText3D();
+                }
+            } else if (e.key.length === 1 && typedText.length < 16) {
+                const char = e.key.toUpperCase();
+                if (FONT_3D[char] !== undefined) {
+                    typedText += char;
+                    playClickSound();
+                    rebuildText3D();
+                    
+                    // Animate matching on-screen key if present
+                    const btn = document.querySelector(`button[data-char="${char}"]`);
+                    if (btn) {
+                        btn.classList.add('active');
+                        setTimeout(() => btn.classList.remove('active'), 100);
+                    }
+                }
+            }
+        });
+
+        // Button action handlers
+        document.getElementById('btn-backspace').onclick = () => {
+            if (typedText.length > 0) {
+                typedText = typedText.slice(0, -1);
+                playClickSound();
+                rebuildText3D();
+            }
+        };
+
+        document.getElementById('btn-reset').onclick = () => {
+            typedText = "";
+            playClickSound();
+            rebuildText3D();
+        };
+
+        document.getElementById('btn-bounce').onclick = () => {
+            playClickSound();
+            letterMeshesGroup.children.forEach((group, idx) => {
+                group.position.y += 3 + Math.random() * 2;
+                group.dropSpeed = 0.5 + Math.random() * 0.3;
+            });
+        };
+
+        document.getElementById('btn-sound').onclick = function() {
+            soundEnabled = !soundEnabled;
+            this.textContent = soundEnabled ? "🔊 SFX: ON" : "🔇 SFX: OFF";
+            playClickSound();
+        };
+
+        document.getElementById('btn-screenshot').onclick = () => {
+            playClickSound();
+            renderer.render(scene, camera);
+            const dataURL = renderer.domElement.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = `minecraft-3d-${typedText.toLowerCase()}.png`;
+            link.href = dataURL;
+            link.click();
+        };
+
+        // --- STREAMING_CHUNK:Running Three.js render loop and animation physics... ---
+        let clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            // Animate letter drop physics and gentle floating idle
+            letterMeshesGroup.children.forEach((group, idx) => {
+                // Drop in physics toward target
+                if (group.position.y > group.targetY) {
+                    group.position.y -= (group.position.y - group.targetY) * group.dropSpeed;
+                    if (Math.abs(group.position.y - group.targetY) < 0.05) {
+                        group.position.y = group.targetY;
+                    }
+                } else {
+                    // Idle floating bobbing
+                    group.position.y = group.baseY + Math.sin(time * 2 + idx * 0.5) * 0.15;
+                }
+            });
+
+            // Gentle rotation of the whole word group for cinematic view
+            letterMeshesGroup.rotation.y = Math.sin(time * 0.3) * 0.1;
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Window resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+        // Initialize first render
+        rebuildText3D();
+        animate();
+
+    </script>
+</body>
+</html>
